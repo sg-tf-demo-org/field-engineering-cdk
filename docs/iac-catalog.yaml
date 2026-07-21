@@ -1,0 +1,69 @@
+# IaC Git SoT catalog — used by Aiden route-iac-repo (discover → score → act/ask)
+# Keep in sync with GitLab group stackgen-group.
+group: stackgen-group
+defaults:
+  region: us-east-1
+  env: dev
+  tags:
+    Owner: platform
+    ManagedBy: aiden
+    CostCenter: FE-DEMO
+
+repos:
+  - project_id: stackgen-group/field-engineering
+    gitlab_id: 84661149
+    kind: platform-cfn
+    description: Live EKS platform CloudFormation (networking, eks-cluster, logs, ingress)
+    signals:
+      names: [field-engineering, eks, platform, cluster]
+      paths:
+        - cloudformation/appstacks/eks-cluster/template.yaml
+        - cloudformation/appstacks/networking/template.yaml
+        - cloudformation/appstacks/cluster-logs/template.yaml
+      resource_types: [AWS::EKS::Cluster, AWS::EC2::SecurityGroup, AWS::S3::Bucket]
+      intents:
+        - lock down EKS API / PublicAccessCidrs / cluster endpoint
+        - SSH / port 22 / breakglass SG
+        - private cluster logs bucket
+    file_hints:
+      eks_api: cloudformation/appstacks/eks-cluster/template.yaml
+      ssh_sg: cloudformation/appstacks/networking/template.yaml
+      cluster_logs: cloudformation/appstacks/cluster-logs/template.yaml
+
+  - project_id: stackgen-group/aiden-aws-cloudformation
+    gitlab_id: 84657713
+    kind: app-cfn
+    description: App CloudFormation appstacks (checkout, cart, otel)
+    signals:
+      names: [aiden-aws-cloudformation, cloudformation, checkout, cart, otel]
+      paths:
+        - cloudformation/appstacks/*/template.yaml
+      resource_types: [AWS::SQS::Queue, AWS::SNS::Topic, AWS::Lambda::Function, AWS::S3::Bucket]
+      intents:
+        - checkout / cart / order queue / DLQ
+        - app CFN template change
+    file_hints:
+      app: cloudformation/appstacks/<app>/template.yaml
+
+  - project_id: stackgen-group/aiden-aws-cdk
+    gitlab_id: 84663981
+    kind: app-cdk
+    description: AWS CDK stacks (synth → CFN governance)
+    signals:
+      names: [aiden-aws-cdk, cdk, construct]
+      paths:
+        - lib/*-stack.ts
+        - cdk.json
+        - bin/
+      resource_types: [aws-cdk-lib, Bucket, Queue, Function]
+      intents:
+        - CDK / construct / synth
+        - TypeScript stack change
+    file_hints:
+      s3: lib/s3-assets-stack.ts
+      default: lib/
+
+scoring:
+  clear_winner_min: 70
+  clear_margin: 15
+  ask_when: [greenfield, ambiguous]
