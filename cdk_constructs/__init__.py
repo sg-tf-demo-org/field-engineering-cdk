@@ -1,4 +1,4 @@
-"""Pre-built FM-CDK building blocks (field-engineering platform).
+"""Pre-built CDK building blocks (field-engineering platform).
 
 Reusable, governance-compliant constructs the platform/dev teams assemble instead
 of hand-writing raw resources. Each block bakes in the org guardrails (customer-managed
@@ -12,6 +12,7 @@ from .secure_topic import SecureTopic
 from .secure_table import SecureTable
 from .secure_function import SecureFunction
 from .secure_vpc import SecureVpc
+from .secure_database import SecureDatabase
 
 __all__ = [
     "SecureBucket",
@@ -20,4 +21,5 @@ __all__ = [
     "SecureTable",
     "SecureFunction",
     "SecureVpc",
+    "SecureDatabase",
 ]

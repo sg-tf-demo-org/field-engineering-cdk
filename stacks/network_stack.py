@@ -2,7 +2,7 @@
 from aws_cdk import Stack
 from constructs import Construct
 
-from fm_constructs import SecureVpc
+from cdk_constructs import SecureVpc
 
 
 class NetworkStack(Stack):

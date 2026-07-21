@@ -2,7 +2,7 @@
 from aws_cdk import Stack
 from constructs import Construct
 
-from fm_constructs import SecureBucket, SecureTable
+from cdk_constructs import SecureBucket, SecureTable
 
 
 class StorageStack(Stack):

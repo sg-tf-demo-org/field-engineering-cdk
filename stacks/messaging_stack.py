@@ -2,7 +2,7 @@
 from aws_cdk import Stack
 from constructs import Construct
 
-from fm_constructs import DlqQueue, SecureTopic
+from cdk_constructs import DlqQueue, SecureTopic
 
 
 class MessagingStack(Stack):

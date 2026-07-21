@@ -13,7 +13,7 @@ from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sqs as sqs
 from constructs import Construct
 
-from fm_constructs import SecureFunction
+from cdk_constructs import SecureFunction
 
 _API_CODE = """
 import json

@@ -16,12 +16,13 @@ the org governance gate:
 | `fe-network` | VPC (2 AZ), VPC flow logs, locked-down app security group |
 | `fe-storage` | S3 data-lake bucket (CMK), DynamoDB catalog table (CMK, PITR) |
 | `fe-messaging` | SQS work queue + DLQ (CMK), SNS events topic (CMK) |
+| `fe-database` | RDS PostgreSQL (CMK, private, backups), DynamoDB sessions table (CMK), S3 audit-log bucket (CMK) |
 | `fe-compute-api` | Lambda (least-privilege) fronted by API Gateway (access logging) |
 
 All resources are assembled from pre-built, compliant building blocks in
-`fm_constructs/` (`SecureBucket`, `DlqQueue`, `SecureTopic`, `SecureTable`,
-`SecureFunction`, `SecureVpc`). Devs assemble blocks instead of hand-writing raw
-resources, so guardrails are baked in.
+`cdk_constructs/` (`SecureBucket`, `DlqQueue`, `SecureTopic`, `SecureTable`,
+`SecureFunction`, `SecureVpc`, `SecureDatabase`). Devs assemble blocks instead of
+hand-writing raw resources, so guardrails are baked in.
 
 ## Governance
 
@@ -54,8 +55,8 @@ governance/scan-cfn.sh cdk.out --json governance-result.json
 app.py                 # CDK app entrypoint (us-east-1, app-wide mandatory tags)
 cdk.json
 requirements.txt
-fm_constructs/         # pre-built compliant building blocks
-stacks/                # network / storage / messaging / compute-api stacks
+cdk_constructs/        # pre-built compliant building blocks
+stacks/                # network / storage / messaging / database / compute-api stacks
 governance/            # the scan gate (Trivy CSPM + Rego tags/region)
 .gitlab-ci.yml         # governance backstop pipeline
 ```
