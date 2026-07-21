@@ -176,7 +176,28 @@ notify_aiden_deploy:
       [[ -n "${AIDEN_DEPLOY_WEBHOOK_TOKEN:-}" ]] && HDRS+=(-H "Authorization: Bearer ${AIDEN_DEPLOY_WEBHOOK_TOKEN}")
       curl -sS -f -X POST "${AIDEN_DEPLOY_WEBHOOK_URL}" "${HDRS[@]}" -d "${PAYLOAD}"
 
-# Aiden bypass path: notify Guild to scan this MR (human-raised or any MR).
+# Deterministic FAIL notification: if the governance gate failed, file EXACTLY ONE issue.
+# Runs only on_failure of an earlier stage (governance-scan is the only blocking gate).
+governance_issue_on_fail:
+  stage: notify
+  image: public.ecr.aws/docker/library/alpine:3.20
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_failure
+  before_script:
+    - apk add --no-cache curl jq >/dev/null
+  script:
+    - |
+      set -uo pipefail
+      : "${GOVERNANCE_ISSUE_TOKEN:?GOVERNANCE_ISSUE_TOKEN not set}"
+      MR_URL="${CI_PROJECT_URL}/-/merge_requests/${CI_MERGE_REQUEST_IID}"
+      TITLE="Governance scan FAIL: MR !${CI_MERGE_REQUEST_IID}"
+      DESC="## Governance gate: FAIL\n\nThe governed pipeline blocked MR [!${CI_MERGE_REQUEST_IID}](${MR_URL}).\n\n- Branch: \`${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}\`\n- Pipeline: ${CI_PIPELINE_URL}\n- Gate: Governance CSPM (customer-managed KMS) + mandatory tags (Owner/CostCenter/Environment) + region us-east-1 only\n\nSee the \`governance-scan\` job log for the exact failing gate(s) and resource(s). Fix and push, or ask Aiden to re-author a compliant template."
+      BODY=$(jq -n --arg t "$TITLE" --arg d "$DESC" '{title:$t, description:$d}')
+      curl -sS -f -X POST --header "PRIVATE-TOKEN: ${GOVERNANCE_ISSUE_TOKEN}" --header "Content-Type: application/json" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/issues" -d "$BODY" | jq -r '.web_url' || echo "issue create skipped"
+
+# Aiden bypass path: notify Guild to review this MR (analysis only; CI owns the FAIL issue).
 notify_aiden_mr_governance:
   stage: notify
   image: public.ecr.aws/docker/library/alpine:3.20
