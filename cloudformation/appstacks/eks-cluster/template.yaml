@@ -10,7 +10,7 @@ Parameters:
     Default: '1.36'
   PublicAccessCidrs:
     Type: CommaDelimitedList
-    Default: '10.0.0.0/8'
+    Default: '10.0.0.0/8'  # LOCKDOWN: never 0.0.0.0/0 (org eks-governance)
     Description: Must NOT be 0.0.0.0/0 in prod (org governance). Live drift: currently 0.0.0.0/0 — remediate via MR.
   VpcId:
     Type: String
