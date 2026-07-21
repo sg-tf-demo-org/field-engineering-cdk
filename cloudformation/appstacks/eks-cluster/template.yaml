@@ -11,7 +11,7 @@ Parameters:
   PublicAccessCidrs:
     Type: CommaDelimitedList
     Default: '10.0.0.0/8'
-    Description: Must NOT be 0.0.0.0/0 in prod (org governance). Live drift: currently 0.0.0.0/0 — remediate via MR.
+    Description: "Must NOT be 0.0.0.0/0 in prod (org governance). Live drift currently world-open; remediate via MR."
   VpcId:
     Type: String
     Description: From networking stack export or live VPC
