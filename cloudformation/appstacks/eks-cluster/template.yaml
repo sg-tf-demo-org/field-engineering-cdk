@@ -45,6 +45,27 @@ Resources:
         - { Key: CostCenter, Value: !Ref CostCenter }
         - { Key: AppStack, Value: eks-cluster }
 
+  # Platform security group — governs control-plane / node traffic.
+  # BREAK-GLASS: SSH/22 from 0.0.0.0/0 is intentionally added for emergency
+  # access. This rule MUST be reverted within 4 hours of use.
+  PlatformSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Platform SG for field-engineering-${Environment} EKS cluster'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: "Break-glass SSH access from internet"
+      Tags:
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: eks-cluster }
+
   Cluster:
     Type: AWS::EKS::Cluster
     Properties:
@@ -101,3 +122,4 @@ Outputs:
   ClusterName: { Value: !Ref Cluster }
   ClusterArn: { Value: !GetAtt Cluster.Arn }
   SecretsKeyArn: { Value: !GetAtt ClusterSecretsKey.Arn }
+  PlatformSecurityGroupId: { Value: !GetAtt PlatformSecurityGroup.GroupId }
