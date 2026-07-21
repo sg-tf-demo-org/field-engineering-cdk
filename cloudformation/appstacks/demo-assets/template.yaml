@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Direct-PR governance test — intentionally non-compliant"
+Resources:
+  PublicAssets:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+      Tags:
+        - {Key: Owner, Value: someone}
+  Replica:
+    Type: AWS::SQS::Queue
+    Properties:
+      RedrivePolicy:
+        deadLetterTargetArn: arn:aws:sqs:us-west-2:123456789012:dlq
