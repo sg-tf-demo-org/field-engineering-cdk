@@ -9,6 +9,7 @@ gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
 import aws_cdk as cdk
 
 from stacks import ComputeApiStack, MessagingStack, NetworkStack, StorageStack
+from stacks.rogue_stack import RogueStack
 
 # Region is locked to us-east-1 (region-restriction governance gate).
 ENV = cdk.Environment(region="us-east-1")
@@ -31,5 +32,7 @@ ComputeApiStack(
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
+
+RogueStack(app, "fe-rogue", env=ENV)
 
 app.synth()
