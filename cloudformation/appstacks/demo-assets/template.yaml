@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Direct-PR governance test — compliant"
+Resources:
+  AssetsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for checkout assets
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+      Tags:
+        - {Key: Owner, Value: platform}
+        - {Key: CostCenter, Value: FE-DEMO}
+        - {Key: Environment, Value: dev}
+  Assets:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref AssetsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - {Key: Owner, Value: platform}
+        - {Key: CostCenter, Value: FE-DEMO}
+        - {Key: Environment, Value: dev}
