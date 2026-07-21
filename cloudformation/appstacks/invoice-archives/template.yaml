@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Invoice Archives S3 bucket — private, CMK-encrypted, governed
+
+Resources:
+
+  InvoiceArchivesKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for Invoice Archives S3 bucket
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  InvoiceArchivesKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/invoice-archives-key
+      TargetKeyId: !Ref InvoiceArchivesKMSKey
+
+  InvoiceArchivesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'invoice-archives-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InvoiceArchivesKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  InvoiceArchivesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref InvoiceArchivesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNonTLS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: '*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+Outputs:
+  BucketName:
+    Description: Invoice Archives S3 Bucket Name
+    Value: !Ref InvoiceArchivesBucket
+  BucketArn:
+    Description: Invoice Archives S3 Bucket ARN
+    Value: !GetAtt InvoiceArchivesBucket.Arn
+  KMSKeyArn:
+    Description: CMK ARN used for bucket encryption
+    Value: !GetAtt InvoiceArchivesKMSKey.Arn
