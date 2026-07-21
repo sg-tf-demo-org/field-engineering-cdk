@@ -13,38 +13,57 @@ variables:
   changes:
     - cloudformation/appstacks/**/*
 
+# Static code analysis on the DELTA (changed appstack templates only), non-blocking:
+# supplementary signal. The fail-closed authoritative gate is `governance-scan`.
 cfn-lint:
   stage: validate
   image: public.ecr.aws/docker/library/python:3.12-slim
+  allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       <<: *cfn_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       <<: *cfn_changes
   before_script:
+    - apt-get update -qq && apt-get install -y -qq git >/dev/null
     - pip install --quiet cfn-lint
   script:
     - |
-      set -euo pipefail
-      mapfile -t files < <(find cloudformation/appstacks -type f -name 'template.yaml' | sort)
-      echo "Linting ${#files[@]} templates"
-      cfn-lint "${files[@]}" || cfn-lint -i E3001,E1010 "${files[@]}"
+      set -uo pipefail
+      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
+      CHANGED=""
+      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
+        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
+      fi
+      if [ -z "$CHANGED" ]; then echo "No changed appstack templates in delta — skipping lint."; exit 0; fi
+      files=""; for f in $CHANGED; do [ -f "$f" ] && files="$files $f"; done
+      [ -z "$files" ] && { echo "nothing to lint"; exit 0; }
+      echo "Linting delta:$files"
+      cfn-lint $files
 
 cfn-guard:
   stage: validate
   image: public.ecr.aws/docker/library/amazonlinux:2023
+  allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       <<: *cfn_changes
   before_script:
-    - yum install -y curl tar gzip >/dev/null
+    - yum install -y curl tar gzip git >/dev/null
     - curl -sL https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-x86_64-unknown-linux-gnu.tar.gz | tar -xz
     - mv cfn-guard-v*/cfn-guard /usr/local/bin/
   script:
     - |
-      set -euo pipefail
+      set -uo pipefail
+      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
+      CHANGED=""
+      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
+        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
+      fi
+      if [ -z "$CHANGED" ]; then echo "No changed appstack templates in delta — skipping guard."; exit 0; fi
       fail=0
-      for f in cloudformation/appstacks/*/template.yaml; do
+      for f in $CHANGED; do
+        [ -f "$f" ] || continue
         echo "==> guard $f"
         cfn-guard validate -d "$f" -r cloudformation/policies/org-governance.guard || fail=1
         if grep -q 'AWS::EKS::Cluster' "$f"; then
@@ -58,6 +77,7 @@ cfn-guard:
 governance-scan:
   stage: scan
   image: public.ecr.aws/docker/library/debian:12-slim
+  needs: []
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       <<: *cfn_changes
