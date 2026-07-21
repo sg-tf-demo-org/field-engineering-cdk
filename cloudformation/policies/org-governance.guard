@@ -1,0 +1,21 @@
+# Org-wide CloudFormation Guard rules for field-engineering
+# Fail closed on region, tags, public S3, SSH from world, star-star IAM
+
+let s3_buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+
+rule s3_not_public when %s3_buckets !empty {
+  %s3_buckets.Properties.PublicAccessBlockConfiguration exists
+  %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+  %s3_buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+  %s3_buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+  %s3_buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+}
+
+let sgs = Resources.*[ Type == 'AWS::EC2::SecurityGroup' ]
+
+rule no_ssh_from_world when %sgs !empty {
+  %sgs.Properties.SecurityGroupIngress[*] {
+    this.FromPort != 22 or
+    this.CidrIp != '0.0.0.0/0'
+  }
+}

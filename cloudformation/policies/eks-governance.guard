@@ -1,0 +1,25 @@
+# EKS-specific governance for field-engineering platform
+
+let clusters = Resources.*[ Type == 'AWS::EKS::Cluster' ]
+
+rule eks_private_endpoint when %clusters !empty {
+  %clusters.Properties.ResourcesVpcConfig.EndpointPrivateAccess == true
+}
+
+rule eks_control_plane_logging when %clusters !empty {
+  %clusters.Properties.Logging.ClusterLogging.EnabledTypes[*] {
+    this.Type in ['api','audit','authenticator','controllerManager','scheduler']
+  }
+}
+
+rule eks_secrets_encryption when %clusters !empty {
+  %clusters.Properties.EncryptionConfig exists
+  %clusters.Properties.EncryptionConfig[*] {
+    this.Resources[*] == 'secrets'
+  }
+}
+
+# Prod must not expose API to the whole internet
+rule eks_public_cidr_not_world when %clusters !empty {
+  %clusters.Properties.ResourcesVpcConfig.PublicAccessCidrs[*] != '0.0.0.0/0'
+}

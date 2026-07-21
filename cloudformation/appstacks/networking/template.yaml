@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Brownfield/lab — field-engineering VPC networking (private+public subnets, IGW, NAT, ELB tags). Live cluster uses default VPC; lab stacks provision an isolated 10.40.0.0/16.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, stage, uat, prod]
+  Owner:
+    Type: String
+  CostCenter:
+    Type: String
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.40.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-vpc-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-igw-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  IgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.0.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-public-${Environment}-1a' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+        - { Key: kubernetes.io/role/elb, Value: '1' }
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.1.0/24
+      AvailabilityZone: us-east-1b
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-public-${Environment}-1b' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+        - { Key: kubernetes.io/role/elb, Value: '1' }
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.10.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-private-${Environment}-1a' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+        - { Key: kubernetes.io/role/internal-elb, Value: '1' }
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.11.0/24
+      AvailabilityZone: us-east-1b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-private-${Environment}-1b' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+        - { Key: kubernetes.io/role/internal-elb, Value: '1' }
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    DependsOn: IgwAttach
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-nat-eip-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-nat-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-public-rt-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IgwAttach
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  PublicAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnetA, RouteTableId: !Ref PublicRouteTable }
+  PublicAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PublicSubnetB, RouteTableId: !Ref PublicRouteTable }
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-private-rt-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PrivateSubnetA, RouteTableId: !Ref PrivateRouteTable }
+  PrivateAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref PrivateSubnetB, RouteTableId: !Ref PrivateRouteTable }
+
+  PlatformNodesSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'field-engineering ${Environment} platform nodes'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.40.0.0/16
+          Description: HTTPS within VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: !Sub 'fe-nodes-sg-${Environment}' }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: networking }
+
+Outputs:
+  VpcId: { Value: !Ref Vpc, Export: { Name: !Sub 'fe-${Environment}-vpc' } }
+  PrivateSubnetIds:
+    Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+    Export: { Name: !Sub 'fe-${Environment}-private-subnets' }
+  PublicSubnetIds:
+    Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+    Export: { Name: !Sub 'fe-${Environment}-public-subnets' }
+  PlatformNodesSGId:
+    Value: !Ref PlatformNodesSG
+    Export: { Name: !Sub 'fe-${Environment}-nodes-sg' }
