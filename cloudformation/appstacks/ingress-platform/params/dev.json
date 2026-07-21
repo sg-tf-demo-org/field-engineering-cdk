@@ -1,0 +1,6 @@
+[
+  {"ParameterKey": "Environment", "ParameterValue": "dev"},
+  {"ParameterKey": "Owner", "ParameterValue": "platform"},
+  {"ParameterKey": "CostCenter", "ParameterValue": "FE-DEMO"},
+  {"ParameterKey": "VpcId", "ParameterValue": "USE_NETWORKING_EXPORT"}
+]

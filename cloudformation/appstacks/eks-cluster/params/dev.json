@@ -1,0 +1,11 @@
+[
+  {"ParameterKey": "Environment", "ParameterValue": "dev"},
+  {"ParameterKey": "Owner", "ParameterValue": "platform"},
+  {"ParameterKey": "CostCenter", "ParameterValue": "FE-DEMO"},
+  {"ParameterKey": "KubernetesVersion", "ParameterValue": "1.36"},
+  {"ParameterKey": "PublicAccessCidrs", "ParameterValue": "10.0.0.0/8"},
+  {"ParameterKey": "VpcId", "ParameterValue": "USE_NETWORKING_EXPORT"},
+  {"ParameterKey": "SubnetIds", "ParameterValue": "USE_NETWORKING_EXPORT"},
+  {"ParameterKey": "ClusterRoleArn", "ParameterValue": "USE_IAM_EXPORT"},
+  {"ParameterKey": "NodeRoleArn", "ParameterValue": "USE_IAM_EXPORT"}
+]

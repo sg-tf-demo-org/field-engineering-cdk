@@ -1,0 +1,5 @@
+[
+  {"ParameterKey": "Environment", "ParameterValue": "uat"},
+  {"ParameterKey": "Owner", "ParameterValue": "platform"},
+  {"ParameterKey": "CostCenter", "ParameterValue": "FE-DEMO"}
+]
