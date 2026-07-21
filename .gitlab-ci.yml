@@ -4,6 +4,16 @@ stages:
   - evidence
   - notify
 
+# Auto-retry ONLY transient infra failures (e.g. public.ecr.aws image-pull rate limits).
+# Real policy failures are script_failure and are never retried, so the gate stays honest.
+default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - unknown_failure
+
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   TRIVY_VERSION: "0.72.0"
