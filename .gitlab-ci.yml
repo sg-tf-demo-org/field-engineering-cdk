@@ -1,3 +1,18 @@
+# ============================================================================
+# field-engineering (CloudFormation) — GOVERNANCE BACKSTOP pipeline.
+#
+# PRIMARY gate is now SHIFT-LEFT / PRE-PR: developers (and Aiden) run the
+# governance gate BEFORE a PR exists — via mcp-cdk-governance (CDK) or
+# mcp-cfn-generator (CFN). A failing change never becomes a PR on the
+# sanctioned path.
+#
+# THIS pipeline is the REQUIRED MERGE BACKSTOP (defense-in-depth): it re-runs
+# the SAME deterministic gate on the MR so any hand-raised / unsanctioned MR
+# that bypassed the pre-PR gate is still blocked before it merges to protected
+# main. In the happy path (pre-PR gate already PASSed) it is green.
+#   - governance-scan       -> required, fail-closed merge check
+#   - governance_issue_on_fail -> files exactly one issue for unsanctioned FAILs
+# ============================================================================
 stages:
   - validate
   - scan
