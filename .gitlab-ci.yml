@@ -64,15 +64,27 @@ governance-scan:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       <<: *cfn_changes
   before_script:
-    - apt-get update -qq && apt-get install -y -qq curl tar >/dev/null
+    - apt-get update -qq && apt-get install -y -qq curl tar git >/dev/null
     - curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy
     - curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" | tar -xz -C /usr/local/bin conftest
   script:
     - chmod +x governance/scan-cfn.sh
     - |
-      set -euo pipefail
+      set -uo pipefail
+      # Scan the DELTA: only appstack templates changed by this MR/push.
+      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}"
+      if [ -z "$BASE" ]; then BASE="${CI_COMMIT_BEFORE_SHA:-}"; fi
+      CHANGED=""
+      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
+        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
+      fi
+      if [ -z "$CHANGED" ]; then
+        echo "No changed appstack templates in delta — nothing to scan."; exit 0
+      fi
+      echo "Delta templates:"; echo "$CHANGED"
       fail=0
-      for f in cloudformation/appstacks/*/template.yaml; do
+      for f in $CHANGED; do
+        [ -f "$f" ] || continue
         echo "==> governance scan $f"
         governance/scan-cfn.sh "$f" || fail=1
       done
