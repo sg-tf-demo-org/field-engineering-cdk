@@ -1,0 +1,6 @@
+[
+  {"ParameterKey": "Environment", "ParameterValue": "prod"},
+  {"ParameterKey": "Owner", "ParameterValue": "platform"},
+  {"ParameterKey": "CostCenter", "ParameterValue": "FE-DEMO"},
+  {"ParameterKey": "HostedZoneId", "ParameterValue": "Z04651531ULS293Y1EQT"}
+]

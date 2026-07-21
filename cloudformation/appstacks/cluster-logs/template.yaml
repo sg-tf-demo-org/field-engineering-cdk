@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Brownfield — private S3 + KMS for field-engineering EKS control-plane / audit log archive.
+
+Parameters:
+  Environment: { Type: String, AllowedValues: [dev, stage, uat, prod] }
+  Owner: { Type: String }
+  CostCenter: { Type: String }
+
+Resources:
+  LogsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'fe cluster logs ${Environment}'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Root
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Logs
+            Effect: Allow
+            Principal: { Service: logs.us-east-1.amazonaws.com }
+            Action: [kms:Encrypt, kms:Decrypt, kms:GenerateDataKey*]
+            Resource: '*'
+      Tags:
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: cluster-logs }
+
+  LogsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/fe-cluster-logs-${Environment}'
+      TargetKeyId: !Ref LogsKey
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'fe-eks-logs-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt LogsKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      VersioningConfiguration: { Status: Enabled }
+      Tags:
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ManagedBy, Value: aiden }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+        - { Key: AppStack, Value: cluster-logs }
+
+Outputs:
+  LogsBucketName: { Value: !Ref LogsBucket }
+  LogsKeyArn: { Value: !GetAtt LogsKey.Arn }
