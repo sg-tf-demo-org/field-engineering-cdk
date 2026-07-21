@@ -1,20 +1,20 @@
 # ============================================================================
-# field-engineering (CloudFormation) — GOVERNANCE BACKSTOP pipeline.
+# cdk (AWS CDK Python) — GOVERNANCE BACKSTOP pipeline.
 #
-# PRIMARY gate is now SHIFT-LEFT / PRE-PR: developers (and Aiden) run the
-# governance gate BEFORE a PR exists — via mcp-cdk-governance (CDK) or
-# mcp-cfn-generator (CFN). A failing change never becomes a PR on the
-# sanctioned path.
+# PRIMARY gate is now SHIFT-LEFT / PRE-PR: a CDK developer pushes a feature
+# branch (NOT a PR) and calls mcp-cdk-governance, which synthesizes CDK ->
+# CloudFormation, runs the deterministic governance gate, and raises the MR
+# ONLY on PASS. A failing change never becomes a PR on the sanctioned path.
 #
-# THIS pipeline is the REQUIRED MERGE BACKSTOP (defense-in-depth): it re-runs
-# the SAME deterministic gate on the MR so any hand-raised / unsanctioned MR
-# that bypassed the pre-PR gate is still blocked before it merges to protected
-# main. In the happy path (pre-PR gate already PASSed) it is green.
-#   - governance-scan       -> required, fail-closed merge check
-#   - governance_issue_on_fail -> files exactly one issue for unsanctioned FAILs
+# THIS pipeline is the REQUIRED MERGE BACKSTOP (defense-in-depth): it re-synths
+# and re-scans the MR so any hand-raised / unsanctioned MR that bypassed the
+# pre-PR MCP is still blocked before it merges to protected main. In the happy
+# path (pre-PR gate already PASSed) it is green.
+#   - cdk-synth -> governance-scan  -> required, fail-closed merge check
+#   - governance_issue_on_fail      -> files exactly one issue for unsanctioned FAILs
 # ============================================================================
 stages:
-  - validate
+  - synth
   - scan
   - evidence
   - notify
@@ -34,110 +34,54 @@ variables:
   TRIVY_VERSION: "0.72.0"
   CONFTEST_VERSION: "0.56.0"
 
-.cfn_changes: &cfn_changes
-  changes:
-    - cloudformation/appstacks/**/*
-
-# Static code analysis on the DELTA (changed appstack templates only), non-blocking:
-# supplementary signal. The fail-closed authoritative gate is `governance-scan`.
-cfn-lint:
-  stage: validate
+# ----------------------------------------------------------------------------
+# 1) Synthesize CDK (Python) -> CloudFormation. We NEVER scan CDK source; we
+#    scan the synthesized cdk.out templates so CDK and CFN go through the same gate.
+# ----------------------------------------------------------------------------
+cdk-synth:
+  stage: synth
   image: public.ecr.aws/docker/library/python:3.12-slim
-  allow_failure: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      <<: *cfn_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      <<: *cfn_changes
   before_script:
-    - apt-get update -qq && apt-get install -y -qq git >/dev/null
-    - pip install --quiet cfn-lint
+    - apt-get update -qq && apt-get install -y -qq curl gnupg >/dev/null
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+    - apt-get install -y -qq nodejs >/dev/null
+    - pip install --quiet -r requirements.txt
+    - npm install --global aws-cdk >/dev/null 2>&1
   script:
-    - |
-      set -uo pipefail
-      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
-      CHANGED=""
-      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
-        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
-      fi
-      if [ -z "$CHANGED" ]; then echo "No changed appstack templates in delta — skipping lint."; exit 0; fi
-      files=""; for f in $CHANGED; do [ -f "$f" ] && files="$files $f"; done
-      [ -z "$files" ] && { echo "nothing to lint"; exit 0; }
-      echo "Linting delta:$files"
-      cfn-lint $files
+    - cdk synth --all -o cdk.out -c env=dev -c owner=platform -c costCenter=FE-DEMO
+    - ls -1 cdk.out/*.template.json
+  artifacts:
+    paths: [cdk.out/]
+    expire_in: 1 day
 
-cfn-guard:
-  stage: validate
-  image: public.ecr.aws/docker/library/amazonlinux:2023
-  allow_failure: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      <<: *cfn_changes
-  before_script:
-    - yum install -y curl tar gzip git >/dev/null
-    - curl -sL https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-    - mv cfn-guard-v*/cfn-guard /usr/local/bin/
-  script:
-    - |
-      set -uo pipefail
-      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
-      CHANGED=""
-      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
-        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
-      fi
-      if [ -z "$CHANGED" ]; then echo "No changed appstack templates in delta — skipping guard."; exit 0; fi
-      fail=0
-      for f in $CHANGED; do
-        [ -f "$f" ] || continue
-        echo "==> guard $f"
-        cfn-guard validate -d "$f" -r cloudformation/policies/org-governance.guard || fail=1
-        if grep -q 'AWS::EKS::Cluster' "$f"; then
-          cfn-guard validate -d "$f" -r cloudformation/policies/eks-governance.guard || fail=1
-        fi
-      done
-      exit $fail
-
-# Unified Governance gate: CSPM (customer-managed KMS) + mandatory tags + region.
-# Same engine used locally and in the cdk repo (after synth). Fail-closed.
+# ----------------------------------------------------------------------------
+# 2) Governance scan on the synthesized CloudFormation:
+#    Governance CSPM (customer-managed KMS) + mandatory tags + region restriction.
+# ----------------------------------------------------------------------------
 governance-scan:
   stage: scan
   image: public.ecr.aws/docker/library/debian:12-slim
-  needs: []
+  needs: [cdk-synth]
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      <<: *cfn_changes
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      <<: *cfn_changes
   before_script:
-    - apt-get update -qq && apt-get install -y -qq curl tar git >/dev/null
+    - apt-get update -qq && apt-get install -y -qq curl tar >/dev/null
     - curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy
     - curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" | tar -xz -C /usr/local/bin conftest
   script:
     - chmod +x governance/scan-cfn.sh
-    - |
-      set -uo pipefail
-      # Scan the DELTA: only appstack templates changed by this MR/push.
-      BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}"
-      if [ -z "$BASE" ]; then BASE="${CI_COMMIT_BEFORE_SHA:-}"; fi
-      CHANGED=""
-      if [ -n "$BASE" ] && git cat-file -e "$BASE" 2>/dev/null; then
-        CHANGED=$(git diff --name-only "$BASE"...HEAD | grep -E '^cloudformation/appstacks/.*/template\.yaml$' || true)
-      fi
-      if [ -z "$CHANGED" ]; then
-        echo "No changed appstack templates in delta — nothing to scan."; exit 0
-      fi
-      echo "Delta templates:"; echo "$CHANGED"
-      fail=0
-      for f in $CHANGED; do
-        [ -f "$f" ] || continue
-        echo "==> governance scan $f"
-        governance/scan-cfn.sh "$f" || fail=1
-      done
-      exit $fail
+    - governance/scan-cfn.sh cdk.out --json governance-result.json
   artifacts:
     when: always
     paths: [governance-result.json]
 
+# ----------------------------------------------------------------------------
+# 3) Governance evidence — MR must carry a ## Governance section.
+# ----------------------------------------------------------------------------
 governance_evidence:
   stage: evidence
   image: public.ecr.aws/docker/library/alpine:3.20
@@ -155,44 +99,12 @@ governance_evidence:
         echo "FAIL: MR description must include a '## Governance' section"
         exit 1
       }
-      echo "OK: governance evidence section present"
+      echo "OK: governance evidence present"
 
-notify_aiden_deploy:
-  stage: notify
-  image: public.ecr.aws/docker/library/alpine:3.20
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
-      allow_failure: false
-  before_script:
-    - apk add --no-cache curl jq
-  script:
-    - |
-      set -euo pipefail
-      : "${AIDEN_DEPLOY_WEBHOOK_URL:?set CI var}"
-      ENV_NAME="${DEPLOY_ENV:-dev}"
-      PAYLOAD=$(jq -n \
-        --arg project "${CI_PROJECT_PATH}" \
-        --arg sha "${CI_COMMIT_SHA}" \
-        --arg ref "${CI_COMMIT_REF_NAME}" \
-        --arg env "${ENV_NAME}" \
-        --arg pipeline "${CI_PIPELINE_URL}" \
-        '{
-          source: "gitlab-ci",
-          event: "notify_aiden_deploy",
-          project: $project,
-          commit_sha: $sha,
-          ref: $ref,
-          environment: $env,
-          pipeline_url: $pipeline,
-          instruction: "Deploy changed cloudformation/appstacks/*/template.yaml for field-engineering platform. Stack name fe-<app>-<env>. Require ## Governance. Use mcp-cfn-deploy with CAPABILITY_IAM and CAPABILITY_NAMED_IAM."
-        }')
-      HDRS=(-H "Content-Type: application/json")
-      [[ -n "${AIDEN_DEPLOY_WEBHOOK_TOKEN:-}" ]] && HDRS+=(-H "Authorization: Bearer ${AIDEN_DEPLOY_WEBHOOK_TOKEN}")
-      curl -sS -f -X POST "${AIDEN_DEPLOY_WEBHOOK_URL}" "${HDRS[@]}" -d "${PAYLOAD}"
-
-# Deterministic FAIL notification: if the governance gate failed, file EXACTLY ONE issue.
-# Runs only on_failure of an earlier stage (governance-scan is the only blocking gate).
+# ----------------------------------------------------------------------------
+# 4) Deterministic FAIL notification: if the governance gate failed, file EXACTLY ONE issue.
+#    Runs only on_failure of an earlier stage (cdk-synth infra retried; governance-scan is the gate).
+# ----------------------------------------------------------------------------
 governance_issue_on_fail:
   stage: notify
   image: public.ecr.aws/docker/library/alpine:3.20
@@ -207,12 +119,14 @@ governance_issue_on_fail:
       : "${GOVERNANCE_ISSUE_TOKEN:?GOVERNANCE_ISSUE_TOKEN not set}"
       MR_URL="${CI_PROJECT_URL}/-/merge_requests/${CI_MERGE_REQUEST_IID}"
       TITLE="Governance scan FAIL: MR !${CI_MERGE_REQUEST_IID}"
-      DESC="## Governance gate: FAIL\n\nThe governed pipeline blocked MR [!${CI_MERGE_REQUEST_IID}](${MR_URL}).\n\n- Branch: \`${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}\`\n- Pipeline: ${CI_PIPELINE_URL}\n- Gate: Governance CSPM (customer-managed KMS) + mandatory tags (Owner/CostCenter/Environment) + region us-east-1 only\n\nSee the \`governance-scan\` job log for the exact failing gate(s) and resource(s). Fix and push, or ask Aiden to re-author a compliant template."
+      DESC="## Governance gate: FAIL (CDK synthesized to CloudFormation, then scanned)\n\nThe governed pipeline blocked MR [!${CI_MERGE_REQUEST_IID}](${MR_URL}).\n\n- Branch: \`${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}\`\n- Pipeline: ${CI_PIPELINE_URL}\n- Gate: Governance CSPM (customer-managed KMS) + mandatory tags (Owner/CostCenter/Environment) + region us-east-1 only\n\nSee the \`governance-scan\` job log for the exact failing gate(s) and resource(s) on the synthesized \`cdk.out\` templates. Fix and push, or ask Aiden to re-author using the FM building blocks (SecureBucket, DlqQueue)."
       BODY=$(jq -n --arg t "$TITLE" --arg d "$DESC" '{title:$t, description:$d}')
       curl -sS -f -X POST --header "PRIVATE-TOKEN: ${GOVERNANCE_ISSUE_TOKEN}" --header "Content-Type: application/json" \
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/issues" -d "$BODY" | jq -r '.web_url' || echo "issue create skipped"
 
-# Aiden bypass path: notify Guild to review this MR (analysis only; CI owns the FAIL issue).
+# ----------------------------------------------------------------------------
+# 4a) Notify Aiden to review (analysis only; CI owns the FAIL issue).
+# ----------------------------------------------------------------------------
 notify_aiden_mr_governance:
   stage: notify
   image: public.ecr.aws/docker/library/alpine:3.20
@@ -225,12 +139,47 @@ notify_aiden_mr_governance:
     - |
       set -euo pipefail
       if [[ -z "${AIDEN_MR_GOVERNANCE_WEBHOOK_URL:-}" ]]; then
-        echo "WARN: AIDEN_MR_GOVERNANCE_WEBHOOK_URL unset — skip Aiden notify"
-        exit 0
+        echo "WARN: AIDEN_MR_GOVERNANCE_WEBHOOK_URL unset — skip Aiden notify"; exit 0
       fi
       CHANGED=$(git diff --name-only "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}}...HEAD" 2>/dev/null | head -80 | jq -R -s -c 'split("\n")|map(select(length>0))' || echo '[]')
-      PAYLOAD=$(jq -n         --arg project "${CI_PROJECT_PATH}"         --arg mr_iid "${CI_MERGE_REQUEST_IID}"         --arg mr_url "${CI_PROJECT_URL}/-/merge_requests/${CI_MERGE_REQUEST_IID}"         --arg source_branch "${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"         --arg target_branch "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"         --arg sha "${CI_COMMIT_SHA}"         --arg pipeline "${CI_PIPELINE_URL}"         --argjson changed "$CHANGED"         '{source:"gitlab-ci",event:"mr_governance_scan",project:$project,mr_iid:$mr_iid,mr_url:$mr_url,source_branch:$source_branch,target_branch:$target_branch,sha:$sha,pipeline_url:$pipeline,changed_files:$changed,instruction:"Bypass/human MR — scan governance, notify PASS/FAIL, do not deploy."}')
-      curl -sS -f -X POST "$AIDEN_MR_GOVERNANCE_WEBHOOK_URL"         -H "Content-Type: application/json"         -d "$PAYLOAD" | head -c 500 || true
-      echo
-      echo "OK: notified Aiden MR governance webhook"
+      PAYLOAD=$(jq -n \
+        --arg project "${CI_PROJECT_PATH}" \
+        --arg mr_iid "${CI_MERGE_REQUEST_IID}" \
+        --arg mr_url "${CI_PROJECT_URL}/-/merge_requests/${CI_MERGE_REQUEST_IID}" \
+        --arg source_branch "${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}" \
+        --arg target_branch "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}" \
+        --arg sha "${CI_COMMIT_SHA}" \
+        --arg pipeline "${CI_PIPELINE_URL}" \
+        --argjson changed "$CHANGED" \
+        '{source:"gitlab-ci",event:"mr_governance_scan",kind:"cdk",project:$project,mr_iid:$mr_iid,mr_url:$mr_url,source_branch:$source_branch,target_branch:$target_branch,sha:$sha,pipeline_url:$pipeline,changed_files:$changed,instruction:"CDK MR — synth to CloudFormation, scan governance (CSPM+tags+region), notify PASS/FAIL, do not deploy."}')
+      curl -sS -f -X POST "$AIDEN_MR_GOVERNANCE_WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD" | head -c 500 || true
+      echo; echo "OK: notified Aiden MR governance webhook"
   allow_failure: true
+
+# ----------------------------------------------------------------------------
+# 4b) Notify Aiden to deploy (post-merge, manual, default branch).
+# ----------------------------------------------------------------------------
+notify_aiden_deploy:
+  stage: notify
+  image: public.ecr.aws/docker/library/alpine:3.20
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: false
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      set -euo pipefail
+      : "${AIDEN_DEPLOY_WEBHOOK_URL:?set CI var}"
+      ENV_NAME="${DEPLOY_ENV:-prod}"
+      PAYLOAD=$(jq -n \
+        --arg project "${CI_PROJECT_PATH}" \
+        --arg sha "${CI_COMMIT_SHA}" \
+        --arg ref "${CI_COMMIT_REF_NAME}" \
+        --arg env "${ENV_NAME}" \
+        --arg pipeline "${CI_PIPELINE_URL}" \
+        '{source:"gitlab-ci",event:"notify_aiden_deploy",kind:"cdk",project:$project,commit_sha:$sha,ref:$ref,environment:$env,pipeline_url:$pipeline,instruction:"Deploy synthesized cdk.out templates to protected env. Synth CDK->CFN, require ## Governance, deploy via mcp-cfn-deploy. Stack cdk-<stack>-<env>."}')
+      HDRS=(-H "Content-Type: application/json")
+      [[ -n "${AIDEN_DEPLOY_WEBHOOK_TOKEN:-}" ]] && HDRS+=(-H "Authorization: Bearer ${AIDEN_DEPLOY_WEBHOOK_TOKEN}")
+      curl -sS -f -X POST "${AIDEN_DEPLOY_WEBHOOK_URL}" "${HDRS[@]}" -d "${PAYLOAD}"

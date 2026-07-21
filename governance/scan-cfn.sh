@@ -83,16 +83,16 @@ for tpl in "${TEMPLATES[@]}"; do
     tout="$(run_bounded "$TRIVY_TIMEOUT" trivy config --quiet --severity HIGH,CRITICAL --exit-code 1 "$tpl" 2>&1)"
     trc=$?
     if [[ $trc -eq 124 ]]; then
-      echo -e "  ${YEL}SKIP${NC} CSPM (trivy) — check-bundle download timed out (${TRIVY_TIMEOUT}s); rego CSPM still enforced"
+      echo -e "  ${YEL}SKIP${NC} Governance CSPM — check-bundle download timed out (${TRIVY_TIMEOUT}s); policy CSPM still enforced"
     elif [[ $trc -ne 0 ]]; then
-      echo -e "  ${RED}FAIL${NC} CSPM (trivy): HIGH/CRITICAL misconfigurations"
+      echo -e "  ${RED}FAIL${NC} Governance CSPM: HIGH/CRITICAL misconfigurations"
       echo "$tout" | grep -E 'MISCONF|HIGH|CRITICAL|AVD-' | sed 's/^/      /' | head -20
       file_fail=1
     else
-      echo -e "  ${GREEN}PASS${NC} CSPM (trivy)"
+      echo -e "  ${GREEN}PASS${NC} Governance CSPM"
     fi
   else
-    echo -e "  ${YEL}SKIP${NC} CSPM (trivy disabled/absent) — rego CSPM still enforced"
+    echo -e "  ${YEL}SKIP${NC} Governance CSPM (engine disabled/absent) — policy CSPM still enforced"
   fi
 
   # Gate 2 + 3 (+ rego CSPM fallback): mandatory tags + region + misconfig via conftest
