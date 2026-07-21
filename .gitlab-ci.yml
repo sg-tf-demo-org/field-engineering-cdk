@@ -1,10 +1,13 @@
 stages:
   - validate
+  - scan
   - evidence
   - notify
 
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  TRIVY_VERSION: "0.55.0"
+  CONFTEST_VERSION: "0.56.0"
 
 .cfn_changes: &cfn_changes
   changes:
@@ -49,6 +52,34 @@ cfn-guard:
         fi
       done
       exit $fail
+
+# Unified governance gate: CSPM (trivy) + mandatory tags + region (conftest/rego).
+# Same engine used locally and in the cdk repo (after synth). Fail-closed.
+governance-scan:
+  stage: scan
+  image: public.ecr.aws/docker/library/debian:12-slim
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      <<: *cfn_changes
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      <<: *cfn_changes
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq curl tar >/dev/null
+    - curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C /usr/local/bin trivy
+    - curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" | tar -xz -C /usr/local/bin conftest
+  script:
+    - chmod +x governance/scan-cfn.sh
+    - |
+      set -euo pipefail
+      fail=0
+      for f in cloudformation/appstacks/*/template.yaml; do
+        echo "==> governance scan $f"
+        governance/scan-cfn.sh "$f" || fail=1
+      done
+      exit $fail
+  artifacts:
+    when: always
+    paths: [governance-result.json]
 
 governance_evidence:
   stage: evidence
