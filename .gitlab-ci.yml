@@ -53,7 +53,7 @@ cfn-guard:
       done
       exit $fail
 
-# Unified governance gate: CSPM (trivy) + mandatory tags + region (conftest/rego).
+# Unified Governance gate: CSPM (customer-managed KMS) + mandatory tags + region.
 # Same engine used locally and in the cdk repo (after synth). Fail-closed.
 governance-scan:
   stage: scan
