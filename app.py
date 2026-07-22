@@ -8,6 +8,7 @@ gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
 """
 import aws_cdk as cdk
 
+from stacks.fe_demo_pass_stack import FeDemoPassStack
 from stacks import (
     ComputeApiStack,
     DatabaseStack,
@@ -38,5 +39,7 @@ ComputeApiStack(
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
+
+FeDemoPassStack(app, "fe-demo-pass", env=ENV)
 
 app.synth()
