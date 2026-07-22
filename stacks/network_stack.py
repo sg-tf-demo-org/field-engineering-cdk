@@ -1,4 +1,5 @@
 """NetworkStack — VPC, flow logs, and a locked-down application security group."""
+import aws_cdk as cdk
 from aws_cdk import Stack
 from constructs import Construct
 
@@ -12,3 +13,7 @@ class NetworkStack(Stack):
         network = SecureVpc(self, "Platform")
         self.vpc = network.vpc
         self.app_sg = network.app_sg
+
+        cdk.Tags.of(self).add("Owner", "platform")
+        cdk.Tags.of(self).add("CostCenter", "FE-DEMO")
+        cdk.Tags.of(self).add("Environment", "dev")
