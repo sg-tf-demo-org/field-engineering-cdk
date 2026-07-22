@@ -10,9 +10,9 @@ from stacks.fe_demo_pass_stack import FeDemoPassStack
 app = cdk.App()
 
 storage = StorageStack(app, "storage", env=cdk.Environment(region="us-east-1"))
-database = DatabaseStack(app, "database", env=cdk.Environment(region="us-east-1"))
-messaging = MessagingStack(app, "messaging", env=cdk.Environment(region="us-east-1"))
 network = NetworkStack(app, "network", env=cdk.Environment(region="us-east-1"))
+database = DatabaseStack(app, "database", vpc=network.vpc, env=cdk.Environment(region="us-east-1"))
+messaging = MessagingStack(app, "messaging", env=cdk.Environment(region="us-east-1"))
 
 FeDemoPassStack(
     app,
