@@ -23,7 +23,7 @@ ComputeApiStack(
     app,
     "fe-compute-api",
     bucket=storage_stack.bucket,
-    table=database_stack.table,
+    table=database_stack.sessions_table,
     queue=messaging_stack.queue,
     topic=messaging_stack.topic,
     env=cdk.Environment(region="us-east-1"),
