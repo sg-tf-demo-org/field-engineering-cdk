@@ -1,3 +1,4 @@
+from stacks.fe_demo_fail_stack import FeDemoFailStack
 #!/usr/bin/env python3
 """field-engineering — AWS CDK (Python) platform application.
 
@@ -38,5 +39,7 @@ ComputeApiStack(
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
+
+FeDemoFailStack(app, "fe-demo-fail", env=cdk.Environment(region="us-west-2"))
 
 app.synth()
