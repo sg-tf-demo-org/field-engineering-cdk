@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private encrypted S3 bucket for checkout assets (CMK, compliant)
+
+Parameters:
+  ReplicationDestinationBucketArn:
+    Type: String
+    Description: ARN of the cross-region replication destination bucket (pre-existing)
+    Default: 'arn:aws:s3:::checkout-assets-replica-us-west-2'
+
+Resources:
+
+  # ── CMK for all bucket encryption in this stack ──────────────────────────
+  CheckoutAssetsCMK:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for checkout-assets S3 bucket encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  CheckoutAssetsCMKAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/checkout-assets-cmk
+      TargetKeyId: !Ref CheckoutAssetsCMK
+
+  # ── Managed policy for S3 replication (no inline policy) ─────────────────
+  S3ReplicationManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows S3 replication for checkout-assets buckets
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSourceBucketRead
+            Effect: Allow
+            Action:
+              - 's3:GetReplicationConfiguration'
+              - 's3:ListBucket'
+            Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-*'
+          - Sid: AllowSourceObjectRead
+            Effect: Allow
+            Action:
+              - 's3:GetObjectVersionForReplication'
+              - 's3:GetObjectVersionAcl'
+              - 's3:GetObjectVersionTagging'
+            Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
+          - Sid: AllowDestinationWrite
+            Effect: Allow
+            Action:
+              - 's3:ReplicateObject'
+              - 's3:ReplicateDelete'
+              - 's3:ReplicateTags'
+            Resource: !Sub '${ReplicationDestinationBucketArn}/*'
+
+  # ── IAM role for S3 replication ───────────────────────────────────────────
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Ref S3ReplicationManagedPolicy
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  # ── Access-logs bucket ────────────────────────────────────────────────────
+  # BucketName is declared explicitly so the main bucket's LoggingConfiguration
+  # can reference it via !Sub (plain string) without a circular CloudFormation dependency.
+  CheckoutAssetsAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-access-logs'
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt CheckoutAssetsCMK.Arn
+            BucketKeyEnabled: true
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      # Self-referential via explicit name string (no !Ref = no circular dep)
+      LoggingConfiguration:
+        DestinationBucketName: !Sub '${AWS::StackName}-access-logs'
+        LogFilePrefix: self-logs/
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateAccessLogs
+            Status: Enabled
+            Filter:
+              Prefix: ''
+            Destination:
+              Bucket: !Ref ReplicationDestinationBucketArn
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  CheckoutAssetsAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CheckoutAssetsAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt CheckoutAssetsAccessLogsBucket.Arn
+              - !Sub '${CheckoutAssetsAccessLogsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+          - Sid: AllowS3LogDelivery
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-access-logs/*'
+
+  # ── Main checkout-assets bucket ───────────────────────────────────────────
+  CheckoutAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt CheckoutAssetsCMK.Arn
+            BucketKeyEnabled: true
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: 1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      # Reference logs bucket by known name to avoid circular !Ref dependency
+      LoggingConfiguration:
+        DestinationBucketName: !Sub '${AWS::StackName}-access-logs'
+        LogFilePrefix: checkout-assets/
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateAll
+            Status: Enabled
+            Filter:
+              Prefix: ''
+            Destination:
+              Bucket: !Ref ReplicationDestinationBucketArn
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  CheckoutAssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CheckoutAssetsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNonKMSEncryption
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CheckoutAssetsBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: DenyUnencryptedTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt CheckoutAssetsBucket.Arn
+              - !Sub '${CheckoutAssetsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+Outputs:
+  BucketName:
+    Description: Name of the checkout assets S3 bucket
+    Value: !Ref CheckoutAssetsBucket
+  BucketArn:
+    Description: ARN of the checkout assets S3 bucket
+    Value: !GetAtt CheckoutAssetsBucket.Arn
+  CMKArn:
+    Description: ARN of the CMK used for bucket encryption
+    Value: !GetAtt CheckoutAssetsCMK.Arn
+  AccessLogsBucketName:
+    Description: Name of the access logs bucket
+    Value: !Ref CheckoutAssetsAccessLogsBucket
