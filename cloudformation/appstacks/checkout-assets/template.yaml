@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private encrypted S3 bucket for checkout assets
+
+Resources:
+
+  CheckoutAssetsCmk:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: CMK for checkout assets S3 bucket
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+  CheckoutAssetsCmkAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/checkout-assets-cmk
+      TargetKeyId: !Ref CheckoutAssetsCmk
+
+  CheckoutAssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref CheckoutAssetsCmk
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: 1
+      LoggingConfiguration:
+        LogFilePrefix: checkout-assets-access-logs/
+      ReplicationConfiguration:
+        Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role"
+        Rules:
+          - Id: ReplicateAll
+            Status: Enabled
+            Destination:
+              Bucket: !Sub "arn:aws:s3:::${AWS::AccountId}-checkout-assets-replica"
+              EncryptionConfiguration:
+                ReplicaKmsKeyID: !GetAtt CheckoutAssetsCmk.Arn
+            SourceSelectionCriteria:
+              SseKmsEncryptedObjects:
+                Status: Enabled
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+        - Key: ManagedBy
+          Value: aiden
+
+Outputs:
+  BucketName:
+    Description: Name of the checkout assets S3 bucket
+    Value: !Ref CheckoutAssetsBucket
+  BucketArn:
+    Description: ARN of the checkout assets S3 bucket
+    Value: !GetAtt CheckoutAssetsBucket.Arn
+  KmsKeyArn:
+    Description: ARN of the CMK used for bucket encryption
+    Value: !GetAtt CheckoutAssetsCmk.Arn
