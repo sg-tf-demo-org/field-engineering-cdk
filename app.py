@@ -1,42 +1,19 @@
-#!/usr/bin/env python3
-"""field-engineering — AWS CDK (Python) platform application.
-
-A realistic multi-stack CDK app assembled from pre-built, governance-compliant
-CDK building blocks (cdk_constructs/). Everything is pinned to us-east-1 and tagged
-with the org-required tags so the synthesized CloudFormation passes the Governance
-gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
-"""
 import aws_cdk as cdk
 
-from stacks import (
-    ComputeApiStack,
-    DatabaseStack,
-    MessagingStack,
-    NetworkStack,
-    StorageStack,
-)
-
-# Region is locked to us-east-1 (region-restriction governance gate).
-ENV = cdk.Environment(region="us-east-1")
+from stacks.fe_compute_api_stack import FeComputeApiStack
+from stacks.fe_database_stack import FeDatabaseStack
+from stacks.fe_messaging_stack import FeMessagingStack
+from stacks.fe_network_stack import FeNetworkStack
+from stacks.fe_storage_stack import FeStorageStack
+from stacks.fe_demo_pass_stack import FeDemoPassStack
 
 app = cdk.App()
 
-network = NetworkStack(app, "fe-network", env=ENV)
-storage = StorageStack(app, "fe-storage", env=ENV)
-messaging = MessagingStack(app, "fe-messaging", env=ENV)
-DatabaseStack(app, "fe-database", vpc=network.vpc, env=ENV)
-ComputeApiStack(
-    app, "fe-compute-api",
-    bucket=storage.bucket,
-    table=storage.table,
-    queue=messaging.queue,
-    topic=messaging.topic,
-    env=ENV,
-)
-
-# App-wide mandatory tags (mandatory-tags governance gate).
-cdk.Tags.of(app).add("Owner", "platform")
-cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
-cdk.Tags.of(app).add("Environment", "dev")
+FeComputeApiStack(app, "fe-compute-api", env=cdk.Environment(region="us-east-1"))
+FeDatabaseStack(app, "fe-database", env=cdk.Environment(region="us-east-1"))
+FeMessagingStack(app, "fe-messaging", env=cdk.Environment(region="us-east-1"))
+FeNetworkStack(app, "fe-network", env=cdk.Environment(region="us-east-1"))
+FeStorageStack(app, "fe-storage", env=cdk.Environment(region="us-east-1"))
+FeDemoPassStack(app, "fe-demo-pass", env=cdk.Environment(region="us-east-1"))
 
 app.synth()
