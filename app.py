@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """field-engineering — AWS CDK (Python) platform application.
 
@@ -8,6 +9,7 @@ gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
 """
 import aws_cdk as cdk
 
+from stacks.fe_demo_fail_public_stack import FeDemoFailPublicStack
 from stacks import (
     ComputeApiStack,
     DatabaseStack,
@@ -38,5 +40,7 @@ ComputeApiStack(
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
+
+FeDemoFailPublicStack(app, "fe-demo-fail-public", env=cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-west-2"))
 
 app.synth()
