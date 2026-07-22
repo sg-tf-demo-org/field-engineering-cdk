@@ -22,6 +22,7 @@ ComputeApiStack(
     bucket=storage.bucket,
     table=database.database,
     queue=messaging.queue,
+    topic=messaging.topic,
     env=env_us,
 )
 FeDemoPassStack(app, "fe-demo-pass", env=env_us)
