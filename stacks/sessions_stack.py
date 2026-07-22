@@ -18,11 +18,6 @@ class SessionsStack(Stack):
             self,
             "Sessions",
             partition_key="session_id",
-            sort_key=dynamodb.Attribute(
-                name="created_at",
-                type=dynamodb.AttributeType.STRING,
-            ),
-            removal_policy=RemovalPolicy.DESTROY,
             owner="platform",
             cost_center="FE-DEMO",
             environment="dev",
