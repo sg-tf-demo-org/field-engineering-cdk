@@ -11,6 +11,7 @@ import aws_cdk as cdk
 from stacks import (
     ComputeApiStack,
     DatabaseStack,
+    FeDemoCmkS3Stack,
     MessagingStack,
     NetworkStack,
     StorageStack,
@@ -33,6 +34,7 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+FeDemoCmkS3Stack(app, "fe-demo-cmk-s3", env=cdk.Environment(region="us-east-1"))
 
 # App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
