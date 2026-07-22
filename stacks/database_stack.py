@@ -4,6 +4,7 @@ Provisions the most common application-tier data resources from compliant buildi
 blocks: an RDS (PostgreSQL) instance, a DynamoDB sessions table, and an S3 audit-log
 bucket. All are customer-managed-KMS encrypted, private, and org-tagged.
 """
+import aws_cdk as cdk
 from aws_cdk import Stack
 from aws_cdk import aws_ec2 as ec2
 from constructs import Construct
@@ -23,3 +24,7 @@ class DatabaseStack(Stack):
 
         audit = SecureBucket(self, "AuditLogs")
         self.audit_bucket = audit.bucket
+
+        cdk.Tags.of(self).add("Owner", "platform")
+        cdk.Tags.of(self).add("CostCenter", "FE-DEMO")
+        cdk.Tags.of(self).add("Environment", "dev")
