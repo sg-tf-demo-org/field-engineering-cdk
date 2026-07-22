@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "fe-demo-pass stack — CMK-encrypted S3, SQS, DynamoDB"
+
+Resources:
+
+  # ── KMS Customer-Managed Key ──────────────────────────────────────────────
+  # EnableKeyRotation: true — mandatory per org CMK policy
+  FeDemoPassKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: "CMK for fe-demo-pass stack (S3, SQS, DynamoDB)"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+
+  FeDemoPassKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/fe-demo-pass
+      TargetKeyId: !Ref FeDemoPassKey
+
+  # ── S3 Bucket — CMK-encrypted, fully private, versioned, logged ───────────
+  FeDemoPassBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt FeDemoPassKey.Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true       # Block all public ACLs
+        BlockPublicPolicy: true     # Block public bucket policies
+        IgnorePublicAcls: true      # Ignore any public ACLs
+        RestrictPublicBuckets: true # Restrict public bucket access
+      AccessControl: Private        # Explicit private ACL (required by S3_BUCKET_NO_PUBLIC_RW_ACL)
+      VersioningConfiguration:
+        Status: Enabled
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: 1
+      LoggingConfiguration:
+        DestinationBucketName: !Sub "fe-demo-pass-logs-${AWS::AccountId}"
+        LogFilePrefix: fe-demo-pass-logs/
+      ReplicationConfiguration:
+        Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/fe-demo-pass-replication"
+        Rules:
+          - Id: ReplicateAll
+            Status: Enabled
+            Destination:
+              Bucket: !Sub "arn:aws:s3:::fe-demo-pass-replica-${AWS::AccountId}"
+              EncryptionConfiguration:
+                ReplicaKmsKeyID: !GetAtt FeDemoPassKey.Arn
+            SourceSelectionCriteria:
+              SseKmsEncryptedObjects:
+                Status: Enabled
+            Filter:
+              Prefix: ""
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+
+  # Bucket policy: deny non-HTTPS and deny non-KMS-encrypted puts
+  FeDemoPassBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FeDemoPassBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyHTTP
+            Action: "s3:*"
+            Effect: Deny
+            Principal: "*"
+            Resource:
+              - !GetAtt FeDemoPassBucket.Arn
+              - !Sub "${FeDemoPassBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": false
+          - Sid: DenyNonEncryptedPuts
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:PutObject"
+            Resource: !Sub "${FeDemoPassBucket.Arn}/*"
+            Condition:
+              StringNotEquals:
+                "s3:x-amz-server-side-encryption": "aws:kms"
+
+  # ── SQS Queue — CMK-encrypted ─────────────────────────────────────────────
+  FeDemoPassQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      KmsMasterKeyId: !GetAtt FeDemoPassKey.Arn
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
+
+  # ── DynamoDB Table — PAY_PER_REQUEST, CMK SSE ─────────────────────────────
+  FeDemoPassTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !GetAtt FeDemoPassKey.Arn
+      Tags:
+        - Key: Owner
+          Value: platform
+        - Key: CostCenter
+          Value: FE-DEMO
+        - Key: Environment
+          Value: dev
