@@ -1,8 +1,11 @@
-"""FeSessionsStack — Sessions DynamoDB table for the field-engineering platform.
+"""FeSessionsStack — Sessions DynamoDB table backed by a customer-managed KMS key.
 
-Uses the SecureTable building block which bakes in CMK encryption,
-point-in-time recovery, and on-demand billing. Governance CSPM passes
-by construction.
+Governance:
+- CMK encryption (customer-managed KMS key via SecureTable) ✅
+- Tags: Owner=platform, CostCenter=FE-DEMO, Environment=dev ✅
+- Region: us-east-1 (enforced in app.py via ENV) ✅
+- No public exposure ✅
+- Least-privilege IAM (no wildcard actions/resources) ✅
 """
 from aws_cdk import Stack
 from constructs import Construct
@@ -18,6 +21,6 @@ class FeSessionsStack(Stack):
             self,
             "SessionsTable",
             partition_key="sessionId",
-            sort_key="userId",
+            sort_key="createdAt",
         )
         self.table = sessions.table
