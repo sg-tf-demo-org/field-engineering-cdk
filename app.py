@@ -14,7 +14,7 @@ env_us = cdk.Environment(region="us-east-1")
 
 network = NetworkStack(app, "fe-network", env=env_us)
 storage = StorageStack(app, "fe-storage", env=env_us)
-database = DatabaseStack(app, "fe-database", env=env_us)
+database = DatabaseStack(app, "fe-database", vpc=network.vpc, env=env_us)
 messaging = MessagingStack(app, "fe-messaging", env=env_us)
 ComputeApiStack(
     app,
