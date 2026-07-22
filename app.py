@@ -15,11 +15,9 @@ network = NetworkStack(app, "network", env=cdk.Environment(region="us-east-1"))
 database = DatabaseStack(app, "database", vpc=network.vpc, env=cdk.Environment(region="us-east-1"))
 messaging = MessagingStack(app, "messaging", env=cdk.Environment(region="us-east-1"))
 
-db_attrs = [a for a in dir(database) if not a.startswith('_')]
-msg_attrs = [a for a in dir(messaging) if not a.startswith('_')]
-stor_attrs = [a for a in dir(storage) if not a.startswith('_')]
-sys.stderr.write("DIAG-DB=" + str([a for a in db_attrs if any(k in a.lower() for k in ['table','dynamo','db'])]) + "\n")
-sys.stderr.write("DIAG-MSG=" + str([a for a in msg_attrs if any(k in a.lower() for k in ['queue','topic','sns','sqs'])]) + "\n")
-sys.stderr.write("DIAG-STOR=" + str([a for a in stor_attrs if any(k in a.lower() for k in ['bucket','s3'])]) + "\n")
+# Get all non-private attrs that are not CDK built-ins
+cdk_base = set(dir(cdk.Stack))
+db_custom = [a for a in dir(database) if not a.startswith('_') and a not in cdk_base]
+sys.stderr.write("DIAG-DB-CUSTOM=" + str(db_custom) + "\n")
 sys.stderr.flush()
 sys.exit(1)
