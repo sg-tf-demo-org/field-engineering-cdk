@@ -4,6 +4,7 @@ from .storage_stack import StorageStack
 from .messaging_stack import MessagingStack
 from .compute_api_stack import ComputeApiStack
 from .database_stack import DatabaseStack
+from .sessions_stack import SessionsStack
 
 __all__ = [
     "NetworkStack",
@@ -11,4 +12,5 @@ __all__ = [
     "MessagingStack",
     "ComputeApiStack",
     "DatabaseStack",
+    "SessionsStack",
 ]
