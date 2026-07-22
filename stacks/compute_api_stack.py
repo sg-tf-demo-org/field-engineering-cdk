@@ -3,6 +3,7 @@
 Wires the shared data/messaging resources into a least-privilege Lambda and exposes
 it through a REST API with access logging and X-Ray tracing enabled.
 """
+import aws_cdk as cdk
 from aws_cdk import RemovalPolicy, Stack
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_dynamodb as dynamodb
@@ -76,3 +77,7 @@ class ComputeApiStack(Stack):
                 ),
             ),
         )
+
+        cdk.Tags.of(self).add("Owner", "platform")
+        cdk.Tags.of(self).add("CostCenter", "FE-DEMO")
+        cdk.Tags.of(self).add("Environment", "dev")
