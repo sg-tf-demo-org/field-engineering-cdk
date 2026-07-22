@@ -13,6 +13,7 @@ from stacks import (
     DatabaseStack,
     MessagingStack,
     NetworkStack,
+    SessionsStack,
     StorageStack,
 )
 
@@ -33,6 +34,7 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+SessionsStack(app, "fe-sessions", env=ENV)
 
 # App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
