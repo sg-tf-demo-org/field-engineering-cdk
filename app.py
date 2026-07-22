@@ -1,35 +1,44 @@
 #!/usr/bin/env python3
+"""field-engineering — AWS CDK (Python) platform application.
+
+A realistic multi-stack CDK app assembled from pre-built, governance-compliant
+CDK building blocks (cdk_constructs/). Everything is pinned to us-east-1 and tagged
+with the org-required tags so the synthesized CloudFormation passes the Governance
+gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
+"""
 import aws_cdk as cdk
 
-from stacks.network_stack import NetworkStack
-from stacks.storage_stack import StorageStack
-from stacks.database_stack import DatabaseStack
-from stacks.messaging_stack import MessagingStack
-from stacks.compute_api_stack import ComputeApiStack
-from stacks.fe_demo_pass_stack import FeDemoPassStack
+from stacks import (
+    ComputeApiStack,
+    DatabaseStack,
+    DemoPassStack,
+    MessagingStack,
+    NetworkStack,
+    StorageStack,
+)
+
+# Region is locked to us-east-1 (region-restriction governance gate).
+ENV = cdk.Environment(region="us-east-1")
 
 app = cdk.App()
 
-env_us = cdk.Environment(region="us-east-1")
-
-# Apply mandatory org tags at the app scope so every synthesized CloudFormation
-# resource (including auto-generated IAM roles, log groups, etc.) inherits them.
-cdk.Tags.of(app).add("Owner", "platform")
-cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
-cdk.Tags.of(app).add("Environment", "dev")
-
-network = NetworkStack(app, "fe-network", env=env_us)
-storage = StorageStack(app, "fe-storage", env=env_us)
-database = DatabaseStack(app, "fe-database", vpc=network.vpc, env=env_us)
-messaging = MessagingStack(app, "fe-messaging", env=env_us)
+network = NetworkStack(app, "fe-network", env=ENV)
+storage = StorageStack(app, "fe-storage", env=ENV)
+messaging = MessagingStack(app, "fe-messaging", env=ENV)
+DatabaseStack(app, "fe-database", vpc=network.vpc, env=ENV)
 ComputeApiStack(
     app, "fe-compute-api",
     bucket=storage.bucket,
-    table=database.sessions,
+    table=storage.table,
     queue=messaging.queue,
     topic=messaging.topic,
-    env=env_us,
+    env=ENV,
 )
-FeDemoPassStack(app, "fe-demo-pass", env=env_us)
+DemoPassStack(app, "fe-demo-pass", env=ENV)
+
+# App-wide mandatory tags (mandatory-tags governance gate).
+cdk.Tags.of(app).add("Owner", "platform")
+cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
+cdk.Tags.of(app).add("Environment", "dev")
 
 app.synth()
