@@ -1,4 +1,5 @@
 """StorageStack — encrypted S3 data lake bucket and a DynamoDB metadata table."""
+import aws_cdk as cdk
 from aws_cdk import Stack
 from constructs import Construct
 
@@ -14,3 +15,7 @@ class StorageStack(Stack):
 
         catalog = SecureTable(self, "Catalog", partition_key="assetId")
         self.table = catalog.table
+
+        cdk.Tags.of(self).add("Owner", "platform")
+        cdk.Tags.of(self).add("CostCenter", "FE-DEMO")
+        cdk.Tags.of(self).add("Environment", "dev")
