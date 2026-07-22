@@ -18,8 +18,8 @@ messaging = MessagingStack(app, "messaging", env=cdk.Environment(region="us-east
 db_attrs = [a for a in dir(database) if not a.startswith('_')]
 msg_attrs = [a for a in dir(messaging) if not a.startswith('_')]
 stor_attrs = [a for a in dir(storage) if not a.startswith('_')]
-sys.stdout.write("DB=" + str([a for a in db_attrs if any(k in a.lower() for k in ['table','dynamo','db'])]) + "\n")
-sys.stdout.write("MSG=" + str([a for a in msg_attrs if any(k in a.lower() for k in ['queue','topic','sns','sqs'])]) + "\n")
-sys.stdout.write("STOR=" + str([a for a in stor_attrs if any(k in a.lower() for k in ['bucket','s3'])]) + "\n")
-sys.stdout.flush()
+sys.stderr.write("DIAG-DB=" + str([a for a in db_attrs if any(k in a.lower() for k in ['table','dynamo','db'])]) + "\n")
+sys.stderr.write("DIAG-MSG=" + str([a for a in msg_attrs if any(k in a.lower() for k in ['queue','topic','sns','sqs'])]) + "\n")
+sys.stderr.write("DIAG-STOR=" + str([a for a in stor_attrs if any(k in a.lower() for k in ['bucket','s3'])]) + "\n")
+sys.stderr.flush()
 sys.exit(1)
