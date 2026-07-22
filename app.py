@@ -12,6 +12,12 @@ app = cdk.App()
 
 env_us = cdk.Environment(region="us-east-1")
 
+# Apply mandatory org tags at the app scope so every synthesized CloudFormation
+# resource (including auto-generated IAM roles, log groups, etc.) inherits them.
+cdk.Tags.of(app).add("Owner", "platform")
+cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
+cdk.Tags.of(app).add("Environment", "dev")
+
 network = NetworkStack(app, "fe-network", env=env_us)
 storage = StorageStack(app, "fe-storage", env=env_us)
 database = DatabaseStack(app, "fe-database", vpc=network.vpc, env=env_us)
