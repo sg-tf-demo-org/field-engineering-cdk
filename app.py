@@ -17,10 +17,9 @@ storage = StorageStack(app, "fe-storage", env=env_us)
 database = DatabaseStack(app, "fe-database", vpc=network.vpc, env=env_us)
 messaging = MessagingStack(app, "fe-messaging", env=env_us)
 ComputeApiStack(
-    app,
-    "fe-compute-api",
+    app, "fe-compute-api",
     bucket=storage.bucket,
-    table=database.database,
+    table=database.sessions,
     queue=messaging.queue,
     topic=messaging.topic,
     env=env_us,
