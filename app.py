@@ -18,7 +18,7 @@ FeDemoPassStack(
     app,
     "fe-demo-pass",
     bucket=storage.bucket,
-    table=database.table,
+    table=database.dynamo_table,
     queue=messaging.queue,
     topic=messaging.topic,
     env=cdk.Environment(region="us-east-1"),
