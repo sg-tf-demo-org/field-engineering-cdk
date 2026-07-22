@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """field-engineering — AWS CDK (Python) platform application.
 
 A realistic multi-stack CDK app assembled from pre-built, governance-compliant
@@ -11,6 +10,7 @@ import aws_cdk as cdk
 from stacks import (
     ComputeApiStack,
     DatabaseStack,
+    DemoPassStack,
     MessagingStack,
     NetworkStack,
     StorageStack,
@@ -33,6 +33,7 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+DemoPassStack(app, "fe-demo-pass", env=ENV)
 
 # App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
