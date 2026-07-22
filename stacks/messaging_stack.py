@@ -1,4 +1,5 @@
 """MessagingStack — SQS work queue with DLQ and an SNS fan-out topic."""
+import aws_cdk as cdk
 from aws_cdk import Stack
 from constructs import Construct
 
@@ -14,3 +15,7 @@ class MessagingStack(Stack):
 
         events = SecureTopic(self, "Events")
         self.topic = events.topic
+
+        cdk.Tags.of(self).add("Owner", "platform")
+        cdk.Tags.of(self).add("CostCenter", "FE-DEMO")
+        cdk.Tags.of(self).add("Environment", "dev")
