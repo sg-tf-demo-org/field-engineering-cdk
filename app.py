@@ -14,14 +14,10 @@ network = NetworkStack(app, "network", env=cdk.Environment(region="us-east-1"))
 database = DatabaseStack(app, "database", vpc=network.vpc, env=cdk.Environment(region="us-east-1"))
 messaging = MessagingStack(app, "messaging", env=cdk.Environment(region="us-east-1"))
 
-FeDemoPassStack(
-    app,
-    "fe-demo-pass",
-    bucket=storage.bucket,
-    table=database.dynamo_table,
-    queue=messaging.queue,
-    topic=messaging.topic,
-    env=cdk.Environment(region="us-east-1"),
-)
-
-app.synth()
+# Diagnostic: print attributes of DatabaseStack and MessagingStack
+db_attrs = [a for a in dir(database) if not a.startswith('_')]
+msg_attrs = [a for a in dir(messaging) if not a.startswith('_')]
+print("DatabaseStack attrs:", [a for a in db_attrs if any(k in a.lower() for k in ['table', 'dynamo', 'db'])])
+print("MessagingStack attrs:", [a for a in msg_attrs if any(k in a.lower() for k in ['queue', 'topic', 'sns', 'sqs'])])
+print("StorageStack attrs:", [a for a in dir(storage) if not a.startswith('_') and any(k in a.lower() for k in ['bucket', 's3'])])
+raise SystemExit("DIAGNOSTIC")
