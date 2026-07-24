@@ -15,6 +15,7 @@ from stacks import (
     NetworkStack,
     StorageStack,
 )
+from stacks.public_bucket_stack import PublicBucketStack
 
 # Region is locked to us-east-1 (region-restriction governance gate).
 ENV = cdk.Environment(region="us-east-1")
@@ -38,5 +39,7 @@ ComputeApiStack(
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
+
+PublicBucketStack(app, "PublicBucketStack", env=cdk.Environment(region="us-west-2"))
 
 app.synth()
