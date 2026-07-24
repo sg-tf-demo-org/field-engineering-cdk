@@ -1,24 +1,22 @@
-"""DemoPassStack — CMK-encrypted S3 bucket stack for the fe-demo-pass demo.
+"""DemoPassStack — fe-demo-pass governance-compliant demo stack.
 
-Uses the SecureBucket building block: customer-managed KMS key, all public
-access blocked, SSL enforced, versioned. Tagged Owner=platform,
-CostCenter=FE-DEMO, Environment=dev. Passes Governance CSPM by construction.
+A minimal stack that provisions a CMK-encrypted, private S3 bucket using the
+SecureBucket building block. Passes Governance CSPM by construction.
 """
-from aws_cdk import Stack
+import aws_cdk as cdk
 from constructs import Construct
 
-from cdk_constructs import SecureBucket
+from cdk_constructs.secure_bucket import SecureBucket
 
 
-class DemoPassStack(Stack):
-    def __init__(self, scope: Construct, cid: str, **kwargs):
-        super().__init__(scope, cid, **kwargs)
+class DemoPassStack(cdk.Stack):
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
 
-        demo = SecureBucket(
+        self.bucket = SecureBucket(
             self,
-            "DemoBucket",
+            "DemoPassBucket",
             owner="platform",
             cost_center="FE-DEMO",
             environment="dev",
         )
-        self.bucket = demo.bucket
