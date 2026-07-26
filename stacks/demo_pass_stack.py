@@ -15,16 +15,24 @@ class DemoPassStack(cdk.Stack):
     def __init__(self, scope: Construct, stack_id: str, **kwargs) -> None:
         super().__init__(scope, stack_id, **kwargs)
 
-        self.bucket = SecureBucket(
+        self._bucket = SecureBucket(
             self, "DemoPassBucket",
             owner="platform",
             cost_center="FE-DEMO",
             environment="dev",
         )
 
-        self.table = SecureTable(
+        self._table = SecureTable(
             self, "DemoPassTable",
             owner="platform",
             cost_center="FE-DEMO",
             environment="dev",
         )
+
+    @property
+    def bucket(self):
+        return self._bucket
+
+    @property
+    def table(self):
+        return self._table
