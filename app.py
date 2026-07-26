@@ -14,6 +14,7 @@ from stacks import (
     MessagingStack,
     NetworkStack,
     StorageStack,
+    DemoPassStack,
 )
 
 # Region is locked to us-east-1 (region-restriction governance gate).
@@ -33,6 +34,7 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+DemoPassStack(app, "fe-demo-pass", env=ENV)
 
 # App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
