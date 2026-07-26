@@ -6,6 +6,7 @@ CDK building blocks (cdk_constructs/). Everything is pinned to us-east-1 and tag
 with the org-required tags so the synthesized CloudFormation passes the Governance
 gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
 """
+import os
 import aws_cdk as cdk
 
 from stacks import (
@@ -15,6 +16,7 @@ from stacks import (
     NetworkStack,
     StorageStack,
 )
+from stacks.public_s3_stack import PublicS3Stack
 
 # Region is locked to us-east-1 (region-restriction governance gate).
 ENV = cdk.Environment(region="us-east-1")
@@ -33,6 +35,7 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+PublicS3Stack(app, "PublicS3Stack", env=cdk.Environment(account=os.getenv("CDK_DEFAULT_ACCOUNT"), region="us-west-2"))
 
 # App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
