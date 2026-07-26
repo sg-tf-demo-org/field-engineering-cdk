@@ -36,7 +36,7 @@ ComputeApiStack(
 )
 DemoPassStack(app, "fe-demo-pass", env=ENV)
 
-# App-wide mandatory tags (mandatory-tags governance gate)
+# App-wide mandatory tags (mandatory-tags governance gate).
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
