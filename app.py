@@ -7,16 +7,16 @@ with the org-required tags so the synthesized CloudFormation passes the Governan
 gate (Governance CSPM + mandatory tags + region us-east-1) by construction.
 """
 import aws_cdk as cdk
-
 from stacks import (
-    ComputeApiStack,
-    DatabaseStack,
-    MessagingStack,
     NetworkStack,
     StorageStack,
+    MessagingStack,
+    DemoPassStack,
+    DatabaseStack,
+    ComputeApiStack,
 )
 
-# Region is locked to us-east-1 (region-restriction governance gate).
+# Pin to us-east-1 (region-restriction governance guardrail)
 ENV = cdk.Environment(region="us-east-1")
 
 app = cdk.App()
@@ -33,8 +33,9 @@ ComputeApiStack(
     topic=messaging.topic,
     env=ENV,
 )
+DemoPassStack(app, "fe-demo-pass", env=ENV)
 
-# App-wide mandatory tags (mandatory-tags governance gate).
+# App-wide mandatory tags (mandatory-tags governance guardrail)
 cdk.Tags.of(app).add("Owner", "platform")
 cdk.Tags.of(app).add("CostCenter", "FE-DEMO")
 cdk.Tags.of(app).add("Environment", "dev")
