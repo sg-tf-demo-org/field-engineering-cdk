@@ -9,10 +9,10 @@ class StorageStack(Stack):
         super().__init__(scope, cid, **kwargs)
 
         data_lake = SecureBucket(self, "DataLake")
-        self.bucket = data_lake
+        self.bucket = data_lake.bucket
 
         catalog = SecureTable(self, "Catalog", partition_key="assetId")
-        self.table = catalog
+        self.table = catalog.table
 
         sessions = SecureTable(
             self, "Sessions",
@@ -21,4 +21,4 @@ class StorageStack(Stack):
             cost_center="FE-DEMO",
             environment="dev",
         )
-        self.sessions_table = sessions
+        self.sessions_table = sessions.table
