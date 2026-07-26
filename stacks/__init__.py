@@ -2,13 +2,15 @@
 from .network_stack import NetworkStack
 from .storage_stack import StorageStack
 from .messaging_stack import MessagingStack
-from .compute_api_stack import ComputeApiStack
+from .compute_stack import ComputeStack
 from .database_stack import DatabaseStack
+from .demo_pass_stack import DemoPassStack
 
 __all__ = [
     "NetworkStack",
     "StorageStack",
     "MessagingStack",
-    "ComputeApiStack",
+    "ComputeStack",
     "DatabaseStack",
+    "DemoPassStack",
 ]
